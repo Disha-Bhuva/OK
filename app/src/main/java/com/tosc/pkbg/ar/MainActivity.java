@@ -81,6 +81,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvGameStatus;
     private ProgressBar healthProgress;
     private ImageView bloodFrame;
+    private ImageView headshotIndicator;
     private View btnShoot;
     private int currentHealth = -1;
 
@@ -95,6 +96,7 @@ public class MainActivity extends AppCompatActivity {
         tvGameStatus = findViewById(R.id.game_status);
         bloodFrame = findViewById(R.id.image_blood_frame);
         healthProgress = findViewById(R.id.healthProgress);
+        headshotIndicator = findViewById(R.id.image_headshot);
 
         game = new Game();
         mlKit = new MLKit(this);
@@ -131,14 +133,6 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        Button resetButton = findViewById(R.id.reset_button);
-        resetButton.setOnClickListener(new View.OnClickListener(){
-            @Override
-            public void onClick(View v) {
-                resetGame();
-            }
-        });
-
         FrameLayout mainLayout = findViewById(R.id.layout_main);
 
         btnShoot = findViewById(R.id.shoot_button);
@@ -156,6 +150,10 @@ public class MainActivity extends AppCompatActivity {
                     mlKit.detectFace(bitmap, () -> {
                         runOnUiThread(() -> {
                             onHitAttempted(true, GameHit.HIT_HEAD);
+                            headshotIndicator.setVisibility(View.VISIBLE);
+                            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                                headshotIndicator.setVisibility(View.GONE);
+                            }, 500);
                         });
                     });
 
@@ -189,28 +187,8 @@ public class MainActivity extends AppCompatActivity {
         storageManager = new StorageManager(this);
     }
 
-    private void resetGame() {
-        GamePlayer player = new GamePlayer();
-        player.playerId = getDeviceId();
-        player.health = 100;
 
-        DatabaseReference winnerIdRef = gameRef.child(gameId).child("winnerId");
-        winnerIdRef.addListenerForSingleValueEvent(new ValueEventListener() {
-            @Override
-            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
-                if (dataSnapshot.getValue(String.class).equals("reset")) {
-                    gameRef.child(gameId).child("winnerId").setValue("");
-                } else {
-                    gameRef.child(gameId).child("winnerId").setValue("reset");
-                }
-            }
 
-            @Override
-            public void onCancelled(@NonNull DatabaseError databaseError) {
-
-            }
-        });
-    }
 
     private void onResolveOkPressed(String dialogValue){
         int shortCode = Integer.parseInt(dialogValue);
@@ -340,23 +318,9 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
                 String winnerId = dataSnapshot.getValue(String.class);
-                if (winnerId == null || winnerId.equals("") || winnerId.equals(" ")) {
-                    btnShoot.setVisibility(View.VISIBLE);
-                    tvGameStatus.setVisibility(View.GONE);
-                    bloodFrame.setVisibility(View.GONE);
-                    findViewById(R.id.reset_button).setVisibility(View.GONE);
-                    findViewById(R.id.iv_crosshair).setVisibility(View.VISIBLE);
-                    return;
-                }
-
-                if (winnerId.equals("reset")) {
-                    findViewById(R.id.reset_button).setVisibility(View.VISIBLE);
-                    return;
-                }
-
+                if (winnerId == null || winnerId.equals("") || winnerId.equals(" ")) return;
                 btnShoot.setVisibility(View.GONE);
                 tvGameStatus.setVisibility(View.VISIBLE);
-                findViewById(R.id.reset_button).setVisibility(View.VISIBLE);
                 findViewById(R.id.iv_crosshair).setVisibility(View.GONE);
                 if (winnerId.equals(getDeviceId())) {
                     tvGameStatus.setText("WINNER WINNER CHICKEN DINNER");
@@ -468,7 +432,9 @@ public class MainActivity extends AppCompatActivity {
 
         if (isHit) {
             GameHit hit = new GameHit(getDeviceId(), hitType);
-            gameHitsRef.push().setValue(hit);
+            if (gameHitsRef != null) {
+                gameHitsRef.push().setValue(hit);
+            }
         }
     }
 
