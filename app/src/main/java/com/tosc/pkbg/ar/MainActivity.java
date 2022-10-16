@@ -5,6 +5,7 @@ import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -15,6 +16,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
@@ -78,6 +80,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvHealth;
     private TextView tvGameStatus;
     private ProgressBar healthProgress;
+    private ImageView bloodFrame;
     private View btnShoot;
     private int currentHealth = -1;
 
@@ -90,6 +93,7 @@ public class MainActivity extends AppCompatActivity {
 
         tvHealth = findViewById(R.id.tv_health);
         tvGameStatus = findViewById(R.id.game_status);
+        bloodFrame = findViewById(R.id.image_blood_frame);
         healthProgress = findViewById(R.id.healthProgress);
 
         game = new Game();
@@ -127,18 +131,34 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        Button resetButton = findViewById(R.id.reset_button);
+        resetButton.setOnClickListener(new View.OnClickListener(){
+            @Override
+            public void onClick(View v) {
+                resetGame();
+            }
+        });
+
         FrameLayout mainLayout = findViewById(R.id.layout_main);
 
         btnShoot = findViewById(R.id.shoot_button);
         btnShoot.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (isReloading) return;
+                if (isReloading) {
+                    Utils.playFireEmpty(MainActivity.this);
+                    return;
+                }
+                isReloading = true;
+                Utils.playFireNormal(MainActivity.this);
 
                 fragment.captureBitmap(bitmap -> {
                     mlKit.detectFace(bitmap, () -> {
-                        onHitAttempted(true, GameHit.HIT_HEAD);
+                        runOnUiThread(() -> {
+                            onHitAttempted(true, GameHit.HIT_HEAD);
+                        });
                     });
+
                     onHitAttempted(tfMobile.detectImage(bitmap), GameHit.HIT_BODY);
                 }, false);
             }
@@ -169,8 +189,28 @@ public class MainActivity extends AppCompatActivity {
         storageManager = new StorageManager(this);
     }
 
+    private void resetGame() {
+        GamePlayer player = new GamePlayer();
+        player.playerId = getDeviceId();
+        player.health = 100;
 
+        DatabaseReference winnerIdRef = gameRef.child(gameId).child("winnerId");
+        winnerIdRef.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                if (dataSnapshot.getValue(String.class).equals("reset")) {
+                    gameRef.child(gameId).child("winnerId").setValue("");
+                } else {
+                    gameRef.child(gameId).child("winnerId").setValue("reset");
+                }
+            }
 
+            @Override
+            public void onCancelled(@NonNull DatabaseError databaseError) {
+
+            }
+        });
+    }
 
     private void onResolveOkPressed(String dialogValue){
         int shortCode = Integer.parseInt(dialogValue);
@@ -213,7 +253,7 @@ public class MainActivity extends AppCompatActivity {
                 appAnchorState = AppAnchorState.NONE;
             } else if (cloudState == Anchor.CloudAnchorState.SUCCESS) {
                 storageManager.nextShortCode((shortCode) -> {
-                    if (shortCode == null){
+                    if (shortCode == null) {
                         snackbarHelper.showMessageWithDismiss(this, "Could not get shortCode");
                         return;
                     }
@@ -228,14 +268,12 @@ public class MainActivity extends AppCompatActivity {
 
                 appAnchorState = AppAnchorState.HOSTED;
             }
-        }
-
-        else if (appAnchorState == AppAnchorState.RESOLVING){
+        } else if (appAnchorState == AppAnchorState.RESOLVING) {
             if (cloudState.isError()) {
                 snackbarHelper.showMessageWithDismiss(this, "Error resolving anchor.. "
                         + cloudState);
                 appAnchorState = AppAnchorState.NONE;
-            } else if (cloudState == Anchor.CloudAnchorState.SUCCESS){
+            } else if (cloudState == Anchor.CloudAnchorState.SUCCESS) {
                 snackbarHelper.showMessageWithDismiss(this, "Anchor resolved successfully");
                 appAnchorState = AppAnchorState.RESOLVED;
             }
@@ -302,9 +340,23 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
                 String winnerId = dataSnapshot.getValue(String.class);
-                if (winnerId == null || winnerId.equals("") || winnerId.equals(" ")) return;
+                if (winnerId == null || winnerId.equals("") || winnerId.equals(" ")) {
+                    btnShoot.setVisibility(View.VISIBLE);
+                    tvGameStatus.setVisibility(View.GONE);
+                    bloodFrame.setVisibility(View.GONE);
+                    findViewById(R.id.reset_button).setVisibility(View.GONE);
+                    findViewById(R.id.iv_crosshair).setVisibility(View.VISIBLE);
+                    return;
+                }
+
+                if (winnerId.equals("reset")) {
+                    findViewById(R.id.reset_button).setVisibility(View.VISIBLE);
+                    return;
+                }
+
                 btnShoot.setVisibility(View.GONE);
                 tvGameStatus.setVisibility(View.VISIBLE);
+                findViewById(R.id.reset_button).setVisibility(View.VISIBLE);
                 findViewById(R.id.iv_crosshair).setVisibility(View.GONE);
                 if (winnerId.equals(getDeviceId())) {
                     tvGameStatus.setText("WINNER WINNER CHICKEN DINNER");
@@ -324,7 +376,7 @@ public class MainActivity extends AppCompatActivity {
         Vector3 position = anchorNode.getWorldPosition();
         Quaternion rotation = anchorNode.getWorldRotation();
         DatabaseReference newObjectRef = gameWorldObjectsRef.push();
-        GameWorldObject worldObject = new GameWorldObject(position, rotation, newObjectRef.getKey(),getDeviceId());
+        GameWorldObject worldObject = new GameWorldObject(position, rotation, newObjectRef.getKey(), getDeviceId());
         game.gameWorldObject.add(worldObject);
         newObjectRef.setValue(worldObject);
     }
@@ -405,20 +457,13 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void onHitAttempted(boolean isHit, int hitType) {
-        isReloading = true;
         if (hitType == GameHit.HIT_HEAD && isHit) {
-            Utils.playHeadshotSound(this);
-        } else  {
-            Utils.playFireSound(this);
+            Utils.playFireHeadshot(this);
         }
 
-
-        new Handler().postDelayed(() -> {
-            runOnUiThread(() -> {
-                Utils.playReloadSound(this);
-                isReloading = false;
-            });
-
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            Utils.playReload(this);
+            isReloading = false;
         }, 1000);
 
         if (isHit) {
@@ -429,10 +474,21 @@ public class MainActivity extends AppCompatActivity {
 
     private void updateGameState(GamePlayer player) {
         if (currentHealth != -1) {
-            if (player.health < currentHealth) {
-                Utils.playHitSound(this);
-                Utils.vibrate(this);
+            int damage = currentHealth - player.health;
+
+            if (damage >= 30) {
+                Utils.playPainHeadshot(this);
+                Utils.vibrate(this, 1000);
+            } else if (damage > 0) {
+                Utils.playPainNormal(this);
+                Utils.vibrate(this, 500);
             }
+        }
+        if (player.health < 30) {
+            bloodFrame.setVisibility(View.VISIBLE);
+        }
+        if (player.health < 20) {
+            bloodFrame.setAlpha(0.8f);
         }
         currentHealth = player.health;
         tvHealth.setText(String.valueOf(player.health));
