@@ -133,6 +133,14 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        Button resetButton = findViewById(R.id.reset_button);
+        resetButton.setOnClickListener(new View.OnClickListener(){
+            @Override
+            public void onClick(View v) {
+                resetGame();
+            }
+        });
+
         FrameLayout mainLayout = findViewById(R.id.layout_main);
 
         btnShoot = findViewById(R.id.shoot_button);
@@ -179,7 +187,7 @@ public class MainActivity extends AppCompatActivity {
                         return;
                     }
 
-                    placeObject(fragment, localAnchor, Uri.parse("Crate1.sfb"), true);
+                    placeObject(fragment, localAnchor, Uri.parse("Pillar.sfb"), true);
 
                 }
         );
@@ -187,8 +195,29 @@ public class MainActivity extends AppCompatActivity {
         storageManager = new StorageManager(this);
     }
 
+    private void resetGame() {
+        GamePlayer player = new GamePlayer();
+        player.playerId = getDeviceId();
+        player.health = 100;
 
+        DatabaseReference winnerIdRef = gameRef.child(gameId).child("winnerId");
+        winnerIdRef.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                gamePlayersRef.child(getDeviceId()).child("health").setValue(100);
+                if (dataSnapshot.getValue(String.class).equals("reset")) {
+                    gameRef.child(gameId).child("winnerId").setValue("");
+                } else {
+                    gameRef.child(gameId).child("winnerId").setValue("reset");
+                }
+            }
 
+            @Override
+            public void onCancelled(@NonNull DatabaseError databaseError) {
+
+            }
+        });
+    }
 
     private void onResolveOkPressed(String dialogValue){
         int shortCode = Integer.parseInt(dialogValue);
@@ -318,9 +347,23 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
                 String winnerId = dataSnapshot.getValue(String.class);
-                if (winnerId == null || winnerId.equals("") || winnerId.equals(" ")) return;
+                if (winnerId == null || winnerId.equals("") || winnerId.equals(" ")) {
+                    btnShoot.setVisibility(View.VISIBLE);
+                    tvGameStatus.setVisibility(View.GONE);
+                    bloodFrame.setVisibility(View.GONE);
+                    findViewById(R.id.reset_button).setVisibility(View.GONE);
+                    findViewById(R.id.iv_crosshair).setVisibility(View.VISIBLE);
+                    return;
+                }
+
+                if (winnerId.equals("reset")) {
+                    findViewById(R.id.reset_button).setVisibility(View.VISIBLE);
+                    return;
+                }
+
                 btnShoot.setVisibility(View.GONE);
                 tvGameStatus.setVisibility(View.VISIBLE);
+                findViewById(R.id.reset_button).setVisibility(View.VISIBLE);
                 findViewById(R.id.iv_crosshair).setVisibility(View.GONE);
                 if (winnerId.equals(getDeviceId())) {
                     tvGameStatus.setText("WINNER WINNER CHICKEN DINNER");
@@ -356,7 +399,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                     Session session = fragment.getArSceneView().getSession();
                     Anchor anchor = session.createAnchor(new Pose(getArray(worldObject.position), getArray(worldObject.rotation)));
-                    placeObject(fragment, anchor, Uri.parse("Crate1.sfb"), false);
+                    placeObject(fragment, anchor, Uri.parse("Pillar.sfb"), false);
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -390,7 +433,7 @@ public class MainActivity extends AppCompatActivity {
                         GameWorldObject worldObject = snapshot.getValue(GameWorldObject.class);
                         Session session = fragment.getArSceneView().getSession();
                         Anchor anchor = session.createAnchor(new Pose(getArray(worldObject.position), getArray(worldObject.rotation)));
-                        placeObject(fragment, anchor, Uri.parse("Crate1.sfb"), false);
+                        placeObject(fragment, anchor, Uri.parse("Pillar.sfb"), false);
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
