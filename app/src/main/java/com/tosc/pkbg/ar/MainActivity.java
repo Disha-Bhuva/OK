@@ -123,19 +123,10 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 fragment.captureBitmap(bitmap -> {
-                    mlKit.detectFace(bitmap);
-                    onHitAttempted(tfMobile.detectImage(bitmap));
-                }, false);
-            }
-        });
-
-        Button faceButton = findViewById(R.id.face_button);
-        faceButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                fragment.captureBitmap(bitmap -> {
-//                    mlKit.detectFace(bitmap);
-                    onHitAttempted(tfMobile.detectImage(bitmap));
+                    mlKit.detectFace(bitmap, () -> {
+                        onHitAttempted(true, GameHit.HIT_HEAD);
+                    });
+                    onHitAttempted(tfMobile.detectImage(bitmap), GameHit.HIT_BODY);
                 }, false);
             }
         });
@@ -152,7 +143,7 @@ public class MainActivity extends AppCompatActivity {
                         appAnchorState = AppAnchorState.HOSTING;
                         snackbarHelper.showMessage(this, "Now hosting anchor...");
 
-                        placeObject(fragment, cloudAnchor, Uri.parse("Column.sfb"), false);
+                        placeObject(fragment, cloudAnchor, Uri.parse("USMC_flag.sfb"), false);
 
                         return;
                     }
@@ -174,7 +165,7 @@ public class MainActivity extends AppCompatActivity {
         storageManager.getCloudAnchorID(shortCode,(cloudAnchorId) -> {
             Anchor resolvedAnchor = fragment.getArSceneView().getSession().resolveCloudAnchor(cloudAnchorId);
             setCloudAnchor(resolvedAnchor);
-            placeObject(fragment, cloudAnchor, Uri.parse("Column.sfb"), false);
+            placeObject(fragment, cloudAnchor, Uri.parse("USMC_flag.sfb"), false);
             snackbarHelper.showMessage(this, "Now Resolving Anchor...");
             appAnchorState = AppAnchorState.RESOLVING;
             addChildSyncing();
@@ -400,10 +391,10 @@ public class MainActivity extends AppCompatActivity {
                 Settings.Secure.ANDROID_ID).substring(0, 5);
     }
 
-    private void onHitAttempted(boolean isHit) {
+    private void onHitAttempted(boolean isHit, int hitType) {
         Utils.playFireSound(this);
         if (isHit) {
-            GameHit hit = new GameHit(getDeviceId(), 1);
+            GameHit hit = new GameHit(getDeviceId(), hitType);
             gameHitsRef.push().setValue(hit);
         }
     }
